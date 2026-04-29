@@ -1743,42 +1743,47 @@
       return out;
     }
     function selectedOptions(el) { return Array.from(el?.selectedOptions || []).map(o => o.value); }
-    function passesFiltersExcept(row, except) {
-      const pairs = [
-        { el: els.fRegion, val: row.region },
-        { el: els.fComplex, val: row.complex },
-        { el: els.fFpg, val: row.flightPairGroup },
-        { el: els.fCarrier, val: row.carrier },
-        { el: els.fBound, val: row.bound },
-        { el: els.fSubline, val: row.subline }, // NEW
-      ];
-      for (const { el, val } of pairs) {
-        if (except === el) continue;
-        const sel = selectedOptions(el);
-        if (sel.length && !sel.includes(String(val))) return false;
-      }
-      if (except === 'cabin') return true;
-      if (CABIN_SELECTED.size > 0 && !CABIN_SELECTED.has(String(row.cabin))) return false;
-      if (except === 'carrier') return true;
-      if (CARRIER_SELECTED.size > 0 && !CARRIER_SELECTED.has(String(row.carrier))) return false;
-      if (except === 'bound') return true;
-      if (BOUND_SELECTED.size > 0 && !BOUND_SELECTED.has(String(row.bound))) return false;
+    function buildFilterState() {
+      return {
+        region: new Set(selectedOptions(els.fRegion).map(String)),
+        complex: new Set(selectedOptions(els.fComplex).map(String)),
+        fpg: new Set(selectedOptions(els.fFpg).map(String)),
+        subline: new Set(selectedOptions(els.fSubline).map(String)),
+        carrier: new Set(Array.from(CARRIER_SELECTED).map(String)),
+        bound: new Set(Array.from(BOUND_SELECTED).map(String)),
+        cabin: new Set(Array.from(CABIN_SELECTED).map(String)),
+        complexGroup: new Set(selectedOptions(els.fComplexGroup).map(String)),
+        revenueGroup: new Set(selectedOptions(els.fRevenueGroup).map(String))
+      };
+    }
+    function hasValueSelection(setObj) { return !!setObj && setObj.size > 0; }
+    function valueMatches(setObj, value) { return !hasValueSelection(setObj) || setObj.has(String(value ?? '')); }
+    function passesFiltersExceptWithState(row, except, fs) {
+      if (except !== els.fRegion && !valueMatches(fs.region, row.region)) return false;
+      if (except !== els.fComplex && !valueMatches(fs.complex, row.complex)) return false;
+      if (except !== els.fFpg && !valueMatches(fs.fpg, row.flightPairGroup)) return false;
+      if (except !== els.fSubline && !valueMatches(fs.subline, row.subline)) return false;
+      if (except !== 'carrier' && !valueMatches(fs.carrier, row.carrier)) return false;
+      if (except !== 'bound' && !valueMatches(fs.bound, row.bound)) return false;
+      if (except !== 'cabin' && !valueMatches(fs.cabin, row.cabin)) return false;
       return true;
     }
+    function passesFiltersExcept(row, except) {
+      return passesFiltersExceptWithState(row, except, buildFilterState());
+    }
     function passesFilters(row) { return passesFiltersExcept(row, null); }
+    function passesFiltersWithState(row, fs) { return passesFiltersExceptWithState(row, null, fs); }
     function passesEventFilters(ev) {
-      const checks = [
-        { el: els.fFpg, key: 'flightPairGroup' },
-        { el: els.fRevenueGroup, key: 'revenueGroup' },
-        { el: els.fRegion, key: 'region' },
-        { el: els.fComplexGroup, key: 'complexGroup' },
-        { el: els.fComplex, key: 'complex' },
-        { el: els.fSubline, key: 'subline' }, // NEW
-      ];
-      for (const c of checks) {
-        const opts = selectedOptions(c.el);
-        if (opts.length && !opts.includes(String(ev[c.key] ?? ''))) return false;
-      }
+      const fs = buildFilterState();
+      return passesEventFiltersWithState(ev, fs);
+    }
+    function passesEventFiltersWithState(ev, fs) {
+      if (!valueMatches(fs.fpg, ev.flightPairGroup)) return false;
+      if (!valueMatches(fs.revenueGroup, ev.revenueGroup)) return false;
+      if (!valueMatches(fs.region, ev.region)) return false;
+      if (!valueMatches(fs.complexGroup, ev.complexGroup)) return false;
+      if (!valueMatches(fs.complex, ev.complex)) return false;
+      if (!valueMatches(fs.subline, ev.subline)) return false;
       return true;
     }
 
@@ -2510,10 +2515,11 @@
         }
 
         // Filter events: after snapshot date and matching current filters
+        const fs = buildFilterState();
         const filteredEvents = (EVENTS || []).filter(ev => {
           if (!ev || !ev.date) return false;
           if (ev.date <= snapshotDate) return false;
-          return passesEventFilters(ev);
+          return passesEventFiltersWithState(ev, fs);
         });
 
         if (!filteredEvents.length) {
@@ -3426,10 +3432,11 @@
 
       // Build Events sheet with all events in current scope (after snapshot date)
       const eventsRows = [];
+      const fs = buildFilterState();
       const filteredEvents = (EVENTS || []).filter(ev => {
         if (!ev || !ev.date) return false;
         if (ev.date <= snapshotDate) return false;
-        return passesEventFilters(ev);
+        return passesEventFiltersWithState(ev, fs);
       });
 
       filteredEvents.sort((a, b) => a.date - b.date);
@@ -5671,7 +5678,8 @@ callback: function(value, index, ticks) {
         }
       }
       const eventsByDay = new Map();
-      const filteredEv = EVENTS.filter(e => passesEventFilters(e));
+      const fs = buildFilterState();
+      const filteredEv = EVENTS.filter(e => passesEventFiltersWithState(e, fs));
       for (const ev of filteredEv) {
         if (!ev.dateKey) continue;
         if (!eventsByDay.has(ev.dateKey)) eventsByDay.set(ev.dateKey, []);
@@ -6053,8 +6061,9 @@ callback: function(value, index, ticks) {
     function renderTopEvents() {
       const box = els.mostEvents;
       if (!box) return;
+      const fs = buildFilterState();
       const filtered = EVENTS
-        .filter(e => passesEventFilters(e))
+        .filter(e => passesEventFiltersWithState(e, fs))
         .filter(e => e.date > TODAY)
         .filter(e => Number.isFinite(e.impact));
       // Sort by date ascending and take first 100
@@ -6077,30 +6086,31 @@ callback: function(value, index, ticks) {
     }
     function updateFilterOptions() {
       const base = getBaseRows(); // <-- narrowed to selected Complex (if any)
+      const fs = buildFilterState();
       // Normal selects (region, complex, fpg, subline …)
       for (const d of SELECT_DESC) {
         const sel = d.el();
         // For the Complex selector itself, we must still compute from RAW (so you can change scope)
         const source = (sel === els.fComplex) ? RAW : base;
-        const rows = source.filter(r => passesFiltersExcept(r, sel));
+        const rows = source.filter(r => passesFiltersExceptWithState(r, sel, fs));
         const values = uniqueSortedStr(rows.map(r => r[d.key]));
         fillSelect(sel, values, /*preserve*/ true);
       }
       // Carrier buttons (scoped)
       {
-        const rows = base.filter(r => passesFiltersExcept(r, 'carrier'));
+        const rows = base.filter(r => passesFiltersExceptWithState(r, 'carrier', fs));
         const values = uniqueSortedStr(rows.map(r => r.carrier));
         renderCarrierButtons(values, /*preserve*/ true);
       }
       // Bound buttons (scoped)
       {
-        const rows = base.filter(r => passesFiltersExcept(r, 'bound'));
+        const rows = base.filter(r => passesFiltersExceptWithState(r, 'bound', fs));
         const values = uniqueSortedStr(rows.map(r => r.bound));
         renderBoundButtons(values, /*preserve*/ true);
       }
       // Cabin buttons (scoped)
       {
-        const rows = base.filter(r => passesFiltersExcept(r, 'cabin'));
+        const rows = base.filter(r => passesFiltersExceptWithState(r, 'cabin', fs));
         const values = uniqueSortedStr(rows.map(r => r.cabin));
         renderCabinButtons(values, /*preserve*/ true);
       }
@@ -6552,7 +6562,8 @@ callback: function(value, index, ticks) {
 
     function refresh() {
       const base = getBaseRows();
-      FILTERED = base.filter(passesFilters);
+      const fs = buildFilterState();
+      FILTERED = base.filter(r => passesFiltersWithState(r, fs));
       HOLIDAY_BANDS = computeHolidayBands();
       els.statRows.textContent = RAW.length.toLocaleString();
       const datesAll = base.map(r => r.date).filter(Boolean).sort((a, b) => a - b);
