@@ -4362,8 +4362,10 @@
         return maxD;
       })();
 
-      const minDate = snapshotDate ? startOfDay(new Date(snapshotDate)) : new Date(2025, 0, 1);
-      const maxDate = newestDate ? endOfDay(new Date(newestDate)) : new Date(2026, 11, 31);
+      const defaultMinDate = snapshotDate ? startOfDay(new Date(snapshotDate)) : new Date(2025, 0, 1);
+      const defaultMaxDate = newestDate ? endOfDay(new Date(newestDate)) : new Date(2026, 11, 31);
+      const minDate = (calendarShiftSliderSelection && calendarShiftSliderSelection.start) ? new Date(calendarShiftSliderSelection.start) : defaultMinDate;
+      const maxDate = (calendarShiftSliderSelection && calendarShiftSliderSelection.end) ? new Date(calendarShiftSliderSelection.end) : defaultMaxDate;
 
       // === NEW: Weekends checkbox (read-only; may be injected elsewhere) ===
       const getShowWeekends = () => {
@@ -5720,6 +5722,14 @@ callback: function(value, index, ticks) {
       };
       els.rangeSlider3.noUiSlider.on('update', updateLabels);
 
+      if (!calendarShiftSliderSelection) {
+        const d0 = dateList3[startIdx[0]] || start;
+        const d1 = dateList3[startIdx[1]] || end;
+        calendarShiftSliderSelection = { start: new Date(d0), end: new Date(d1) };
+        DATE_RANGE3.start = new Date(d0);
+        DATE_RANGE3.end = new Date(d1);
+      }
+
       els.rangeSlider3.noUiSlider.on('change', (vals) => {
         const i0 = Math.round(vals[0]), i1 = Math.round(vals[1]);
         const iMin = Math.min(i0, i1), iMax = Math.max(i0, i1);
@@ -5727,6 +5737,8 @@ callback: function(value, index, ticks) {
         const minDate = d0 ? new Date(d0) : start;
         const maxDate = d1 ? new Date(d1) : end;
         calendarShiftSliderSelection = { start: new Date(minDate), end: new Date(maxDate) };
+        DATE_RANGE3.start = new Date(minDate);
+        DATE_RANGE3.end = new Date(maxDate);
         if (CHART3_MERGED) {
           CHART3_MERGED.options.scales.x.min = minDate;
           CHART3_MERGED.options.scales.x.max = maxDate;
@@ -5739,6 +5751,9 @@ callback: function(value, index, ticks) {
           els.rangeSlider3.noUiSlider.set([0, dateList3.length - 1]);
           if (CHART3_MERGED) {
             CHART3_MERGED.resetZoom?.();
+            calendarShiftSliderSelection = { start: new Date(start), end: new Date(end) };
+            DATE_RANGE3.start = new Date(start);
+            DATE_RANGE3.end = new Date(end);
             CHART3_MERGED.options.scales.x.min = start;
             CHART3_MERGED.options.scales.x.max = end;
             CHART3_MERGED.update();
@@ -7394,7 +7409,13 @@ callback: function(value, index, ticks) {
           carrier: 'Carrier', bound: 'Bound', cabin: 'Cabin'
         };
 
-        const rows = (FILTERED || []).filter(r => r && r.date && r.dateKey && (!dateSet || dateSet.has(String(r.dateKey))));
+        const rows = (FILTERED || []).filter(r => {
+          if (!r || !r.date) return false;
+          const dObj = (r.date instanceof Date) ? r.date : new Date(r.date);
+          if (Number.isNaN(dObj.getTime())) return false;
+          const dKey = fmtDateISO(dObj);
+          return (!dateSet || dateSet.has(String(dKey)));
+        });
         if (!rows.length) {
           alert('No Calendar Shifts data found for the selected export settings.');
           return;
@@ -7458,7 +7479,18 @@ callback: function(value, index, ticks) {
         const ws = XLSX.utils.json_to_sheet(out);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Calendar Shifts Data');
-        XLSX.writeFile(wb, filenameTS_xlsx('CalendarShiftsData'));
+
+        const fileName = filenameTS_xlsx('CalendarShiftsData');
+        const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbOut], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
       }
 
       document.getElementById('downloadCalendarShiftsData')?.addEventListener('click', async () => {
