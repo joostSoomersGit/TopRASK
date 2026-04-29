@@ -832,17 +832,18 @@
       class="tab-panel p-5 -mt-px hidden bg-white/70 backdrop-blur rounded-xl border border-slate-200" role="tabpanel"
       aria-hidden="true">
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3 items-start">
-        <div class="col-span-1">
-          <h2 class="text-lg font-semibold">Calendar Shifts</h2>
-          <div class="text-xs text-slate-500 mt-1">
-            This chart shows <span class="font-semibold">only the RASK coming from the holiday demand component</span>.
+      <div class="flex flex-col gap-4">
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+          <div class="min-w-0">
+            <h2 class="text-lg font-semibold">Calendar Shifts</h2>
+            <div class="text-xs text-slate-500 mt-1">
+              This chart shows <span class="font-semibold">only the RASK coming from the holiday demand component</span>.
+            </div>
           </div>
-        </div>
-        <div class="col-span-1 justify-self-end">
-          <!-- Display Holidays (linked with Demand Forecast section) -->
-          <div class="flex flex-col items-end gap-2 relative">
-              <div class="flex items-center gap-2 flex-wrap justify-end relative">
+
+          <div class="w-full lg:w-auto lg:shrink-0">
+            <div class="flex flex-col lg:items-end gap-2 relative">
+              <div class="flex items-center gap-2 flex-wrap lg:justify-end relative">
                 <span class="text-sm font-medium">Visualization:</span>
                 <button id="vizDdBtn2" type="button" class="chip flex items-center gap-1" aria-haspopup="true"
                   aria-expanded="false" title="Visualization options">
@@ -866,7 +867,7 @@
                   </label>
                 </div>
               </div>
-              <div class="flex items-center gap-2 flex-wrap justify-end relative">
+              <div class="flex items-center gap-2 flex-wrap lg:justify-end relative">
                 <button id="holInfoBtn2" type="button" class="align-middle" title="About holiday windows">💡</button>
                 <span class="text-sm font-medium">Display Holidays:</span>
                 <label class="chip"><input type="checkbox" id="cHolHome2" class="mr-1" />Home</label>
@@ -883,6 +884,7 @@
               </div>
             </div>
           </div>
+        </div>
 
       <div class="grid grid-cols-1 gap-4">
         <div class="col-span-1">
@@ -891,7 +893,6 @@
             <canvas id="raskCalendarShiftsChartMerged" class="block w-full" height="120"></canvas>
           </div>
 
-          <!-- Legend for Calendar Shifts Chart -->
           <div class="mt-2 text-slate-500">
             <div class="flex items-center justify-center gap-6 flex-wrap text-xs leading-snug">
               <div class="flex items-center gap-2">
@@ -909,7 +910,6 @@
             </div>
           </div>
 
-          <!-- Slider for Calendar Shifts chart -->
           <div class="mt-4">
             <div class="flex items-center justify-between text-xs text-slate-600 mb-2">
               <div>Start: <span id="sliderStartLbl3" class="slider-label">—</span></div>
@@ -924,6 +924,7 @@
         </div>
       </div>
     </div>
+
 
 
     <!-- HEATMAP PANEL -->
@@ -7592,6 +7593,10 @@ callback: function(value, index, ticks) {
 
             CHART3_MERGED?.resize();
             CHART3_MERGED?.update('none');
+            requestAnimationFrame(() => {
+              CHART3_MERGED?.resize();
+              CHART3_MERGED?.update('none');
+            });
 
             // Zorg dat andere grafieken dezelfde holiday-bands zien
             if (CHART) CHART.update('none');
