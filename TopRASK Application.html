@@ -236,6 +236,14 @@
       scrollbar-color: #555 #f1f1f1;
     }
 
+
+    /* Ensure Calendar Shifts chart always spans full section width */
+    #raskCalendarShiftsChartMerged {
+      width: 100% !important;
+      max-width: 100%;
+      display: block;
+    }
+
     .tabbar {
       display: flex;
       justify-content: center;
@@ -879,8 +887,8 @@
       <div class="grid grid-cols-1 gap-4">
         <div class="col-span-1">
           <!-- Merged Calendar Shifts Chart (2025 & 2026) -->
-          <div class="h-[350px]">
-            <canvas id="raskCalendarShiftsChartMerged" height="120"></canvas>
+          <div class="h-[350px] w-full">
+            <canvas id="raskCalendarShiftsChartMerged" class="block w-full" height="120"></canvas>
           </div>
 
           <!-- Legend for Calendar Shifts Chart -->
