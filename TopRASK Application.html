@@ -236,6 +236,14 @@
       scrollbar-color: #555 #f1f1f1;
     }
 
+
+    /* Ensure Calendar Shifts chart always spans full section width */
+    #raskCalendarShiftsChartMerged {
+      width: 100% !important;
+      max-width: 100%;
+      display: block;
+    }
+
     .tabbar {
       display: flex;
       justify-content: center;
@@ -824,17 +832,21 @@
       class="tab-panel p-5 -mt-px hidden bg-white/70 backdrop-blur rounded-xl border border-slate-200" role="tabpanel"
       aria-hidden="true">
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3 items-start">
-        <div class="col-span-1">
-          <h2 class="text-lg font-semibold">Calendar Shifts</h2>
-          <div class="text-xs text-slate-500 mt-1">
-            This chart shows <span class="font-semibold">only the RASK coming from the holiday demand component</span>.
+      <div class="flex flex-col gap-4">
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+          <div class="min-w-0">
+            <h2 class="text-lg font-semibold">Calendar Shifts</h2>
+            <div class="text-xs text-slate-500 mt-1">
+              This chart shows <span class="font-semibold">only the RASK coming from the holiday demand component</span>.
+            </div>
+            <div class="mt-3">
+              <button id="downloadCalendarShiftsData" class="chip hover:bg-slate-200 flex items-center gap-1" title="Download Calendar Shift data">Download</button>
+            </div>
           </div>
-        </div>
-        <div class="col-span-1 justify-self-end">
-          <!-- Display Holidays (linked with Demand Forecast section) -->
-          <div class="flex flex-col items-end gap-2 relative">
-              <div class="flex items-center gap-2 flex-wrap justify-end relative">
+
+          <div class="w-full lg:w-auto lg:shrink-0">
+            <div class="flex flex-col lg:items-end gap-2 relative">
+              <div class="flex items-center gap-2 flex-wrap lg:justify-end relative">
                 <span class="text-sm font-medium">Visualization:</span>
                 <button id="vizDdBtn2" type="button" class="chip flex items-center gap-1" aria-haspopup="true"
                   aria-expanded="false" title="Visualization options">
@@ -858,13 +870,12 @@
                   </label>
                 </div>
               </div>
-              <div class="flex items-center gap-2 flex-wrap justify-end relative">
+              <div class="flex items-center gap-2 flex-wrap lg:justify-end relative">
                 <button id="holInfoBtn2" type="button" class="align-middle" title="About holiday windows">💡</button>
                 <span class="text-sm font-medium">Display Holidays:</span>
                 <label class="chip"><input type="checkbox" id="cHolHome2" class="mr-1" />Home</label>
                 <label class="chip"><input type="checkbox" id="cHolOut2" class="mr-1" />Outstation</label>
                 <label class="chip"><input type="checkbox" id="cHolOther2" class="mr-1" />Other</label>
-                <button id="downloadCalendarShiftsData" class="chip hover:bg-slate-200 flex items-center gap-1" title="Download Calendar Shift data">Download</button>
                 <div id="holInfoPop2" class="heat-pop"
                   style="display:none; position:absolute; right:0; bottom:26px; overflow-y:hidden;">
                   <div class="line">Holidays are added as special events that can cause temporary changes in demand,</div>
@@ -875,15 +886,13 @@
               </div>
             </div>
           </div>
+        </div>
 
-      <div class="grid grid-cols-1 gap-4">
-        <div class="col-span-1">
-          <!-- Merged Calendar Shifts Chart (2025 & 2026) -->
-          <div class="h-[350px]">
-            <canvas id="raskCalendarShiftsChartMerged" height="120"></canvas>
+        <div class="w-full min-w-0">
+          <div class="h-[350px] w-full min-w-0">
+            <canvas id="raskCalendarShiftsChartMerged" class="block h-full w-full"></canvas>
           </div>
 
-          <!-- Legend for Calendar Shifts Chart -->
           <div class="mt-2 text-slate-500">
             <div class="flex items-center justify-center gap-6 flex-wrap text-xs leading-snug">
               <div class="flex items-center gap-2">
@@ -901,7 +910,6 @@
             </div>
           </div>
 
-          <!-- Slider for Calendar Shifts chart -->
           <div class="mt-4">
             <div class="flex items-center justify-between text-xs text-slate-600 mb-2">
               <div>Start: <span id="sliderStartLbl3" class="slider-label">—</span></div>
@@ -916,6 +924,7 @@
         </div>
       </div>
     </div>
+
 
 
     <!-- HEATMAP PANEL -->
@@ -7386,37 +7395,53 @@ callback: function(value, index, ticks) {
         };
 
         const rows = (FILTERED || []).filter(r => r && r.date && r.dateKey && (!dateSet || dateSet.has(String(r.dateKey))));
+        if (!rows.length) {
+          alert('No Calendar Shifts data found for the selected export settings.');
+          return;
+        }
+
         for (const r of rows) {
           const groupVals = by.map(k => String(r[k] ?? ''));
           const gKey = JSON.stringify(groupVals);
           let daily = grouped.get(gKey);
           if (!daily) { daily = { groupVals, map: new Map() }; grouped.set(gKey, daily); }
-          const k = String(r.dateKey);
-          let rec = daily.map.get(k);
-          if (!rec) rec = { date: r.date, rev: 0, seat: 0 };
+
+          const dObj = (r.date instanceof Date) ? r.date : new Date(r.date);
+          if (Number.isNaN(dObj.getTime())) continue;
+          const dk = fmtDateISO(dObj);
+
+          let rec = daily.map.get(dk);
+          if (!rec) rec = { date: new Date(dObj), rev: 0, seat: 0 };
           rec.rev += Number(r.rev) || 0;
           rec.seat += Number(r.seat) || 0;
-          daily.map.set(k, rec);
+          daily.map.set(dk, rec);
         }
 
         const out = [];
         for (const g of grouped.values()) {
-          const dayKeys = Array.from(g.map.keys()).sort((a,b)=>a.localeCompare(b));
+          const dayKeys = Array.from(g.map.keys()).sort((a, b) => a.localeCompare(b));
           const yMap = new Map();
+
           for (const dk of dayKeys) {
             const rec = g.map.get(dk);
             const y = (rec && rec.seat > 0) ? (100 * rec.rev / rec.seat) : null;
             yMap.set(dk, Number.isFinite(y) ? y : null);
           }
+
           for (const dk of dayKeys) {
-            const d = parseDateISO(dk);
-            const prev = new Date(d); prev.setDate(prev.getDate()-364);
+            const d = parseDateISO(dk) || new Date(dk);
+            if (!(d instanceof Date) || Number.isNaN(d.getTime())) continue;
+
+            const prev = new Date(d);
+            prev.setDate(prev.getDate() - 364);
             const prevKey = fmtDateISO(prev);
+
             const y = yMap.get(dk);
             const yPrev = yMap.get(prevKey);
-            const yoy = (y!=null && yPrev!=null) ? (y - yPrev) : null;
+            const yoy = (y != null && yPrev != null) ? (y - yPrev) : null;
+
             const row = {};
-            by.forEach((k,i)=>row[keyLabelMap[k]||k]=g.groupVals[i]||'');
+            by.forEach((k, i) => row[keyLabelMap[k] || k] = g.groupVals[i] || '');
             row['Flight Date'] = dk;
             row['Y'] = y;
             row['Y-1'] = yPrev;
@@ -7424,6 +7449,12 @@ callback: function(value, index, ticks) {
             out.push(row);
           }
         }
+
+        if (!out.length) {
+          alert('No Calendar Shifts rows could be built for export.');
+          return;
+        }
+
         const ws = XLSX.utils.json_to_sheet(out);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Calendar Shifts Data');
@@ -7584,6 +7615,10 @@ callback: function(value, index, ticks) {
 
             CHART3_MERGED?.resize();
             CHART3_MERGED?.update('none');
+            requestAnimationFrame(() => {
+              CHART3_MERGED?.resize();
+              CHART3_MERGED?.update('none');
+            });
 
             // Zorg dat andere grafieken dezelfde holiday-bands zien
             if (CHART) CHART.update('none');
