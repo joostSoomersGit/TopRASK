@@ -849,18 +849,44 @@
               </button>
             </div>
             <!-- Display Holidays (linked with Demand Forecast section) -->
-            <div class="flex items-center gap-2 flex-wrap justify-end relative">
-              <button id="holInfoBtn2" type="button" class="align-middle" title="About holiday windows">💡</button>
-              <span class="text-sm font-medium">Display Holidays:</span>
-              <label class="chip"><input type="checkbox" id="cHolHome2" class="mr-1" />Home</label>
-              <label class="chip"><input type="checkbox" id="cHolOut2" class="mr-1" />Outstation</label>
-              <label class="chip"><input type="checkbox" id="cHolOther2" class="mr-1" />Other</label>
-              <div id="holInfoPop2" class="heat-pop"
-                style="display:none; position:absolute; right:0; bottom:26px; overflow-y:hidden;">
-                <div class="line">Holidays are added as special events that can cause temporary changes in demand,</div>
-                <div class="line mt-1">like drops during Christmas or spikes before school holidays.</div>
-                <div class="line mt-1">This helps the model separate holiday effects from normal patterns.</div>
-                <div class="line mt-1">To reflect their true importance, holidays are weighted by PoO LF contribution.</div>
+            <div class="flex flex-col items-end gap-2 relative">
+              <div class="flex items-center gap-2 flex-wrap justify-end relative">
+                <span class="text-sm font-medium">Visualization:</span>
+                <button id="vizDdBtn2" type="button" class="chip flex items-center gap-1" aria-haspopup="true"
+                  aria-expanded="false" title="Visualization options">
+                  Visualization
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"
+                    aria-hidden="true">
+                    <path fill-rule="evenodd"
+                      d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+                      clip-rule="evenodd" />
+                  </svg>
+                </button>
+                <div id="vizDdMenu2"
+                  class="absolute right-0 top-[calc(100%+6px)] z-20 bg-white border border-slate-200 rounded-md shadow p-2 w-56 hidden">
+                  <label class="flex items-center gap-2 text-sm py-1 px-1 cursor-pointer">
+                    <input id="vizOptWeekends2" type="checkbox" class="mr-1" checked>
+                    Display Weekends
+                  </label>
+                  <label class="flex items-center gap-2 text-sm py-1 px-1 cursor-pointer">
+                    <input id="vizOptWhiteBg2" type="checkbox" class="mr-1">
+                    White background
+                  </label>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 flex-wrap justify-end relative">
+                <button id="holInfoBtn2" type="button" class="align-middle" title="About holiday windows">💡</button>
+                <span class="text-sm font-medium">Display Holidays:</span>
+                <label class="chip"><input type="checkbox" id="cHolHome2" class="mr-1" />Home</label>
+                <label class="chip"><input type="checkbox" id="cHolOut2" class="mr-1" />Outstation</label>
+                <label class="chip"><input type="checkbox" id="cHolOther2" class="mr-1" />Other</label>
+                <div id="holInfoPop2" class="heat-pop"
+                  style="display:none; position:absolute; right:0; bottom:26px; overflow-y:hidden;">
+                  <div class="line">Holidays are added as special events that can cause temporary changes in demand,</div>
+                  <div class="line mt-1">like drops during Christmas or spikes before school holidays.</div>
+                  <div class="line mt-1">This helps the model separate holiday effects from normal patterns.</div>
+                  <div class="line mt-1">To reflect their true importance, holidays are weighted by PoO LF contribution.</div>
+                </div>
               </div>
             </div>
           </div>
@@ -1295,7 +1321,12 @@
       vizOptWeekends: document.getElementById('vizOptWeekends'),
       vizOptHolidayNames: document.getElementById('vizOptHolidayNames'),
       vizOptWhiteBg: document.getElementById('vizOptWhiteBg'),
+      vizDdBtn2: document.getElementById('vizDdBtn2'),
+      vizDdMenu2: document.getElementById('vizDdMenu2'),
+      vizOptWeekends2: document.getElementById('vizOptWeekends2'),
+      vizOptWhiteBg2: document.getElementById('vizOptWhiteBg2'),
       tabChart: document.getElementById('tabChart'),
+      tabCalendarShifts: document.getElementById('tabCalendarShifts'),
     };
 
     const TIP_MESSAGES = [
@@ -4351,8 +4382,63 @@
 
       // === NEW: Weekends checkbox (read-only; may be injected elsewhere) ===
       const getShowWeekends = () => {
-        const cb = document.getElementById('cShowWeekends2');
+        const cb = document.getElementById('vizOptWeekends2');
         return !!cb && !!cb.checked;
+      };
+
+      const CalendarShiftZeroLineAndDeltaFillPlugin = {
+        id: 'calendarShiftZeroLineAndDeltaFill',
+        beforeDatasetsDraw(chart) {
+          const { ctx, chartArea, scales } = chart;
+          const yScale = scales?.y;
+          if (!ctx || !chartArea || !yScale) return;
+          const yZero = yScale.getPixelForValue(0);
+          if (!Number.isFinite(yZero)) return;
+
+          const meta = chart.getDatasetMeta(2); // YoY Delta
+          const ds = chart.data?.datasets?.[2];
+          const pts = meta?.data || [];
+          const vals = Array.isArray(ds?.data) ? ds.data : [];
+          if (pts.length > 1 && vals.length > 1) {
+            ctx.save();
+            for (let i = 0; i < pts.length - 1; i++) {
+              const p0 = pts[i], p1 = pts[i + 1];
+              const v0 = Number(vals[i]?.y), v1 = Number(vals[i + 1]?.y);
+              if (![p0?.x, p0?.y, p1?.x, p1?.y, v0, v1].every(Number.isFinite)) continue;
+              const avg = (v0 + v1) / 2;
+              const t = Math.min(1, Math.abs(avg) / 1.5);
+              const alpha = 0.10 + (0.45 * t);
+              const base = avg >= 0 ? `34,197,94` : `239,68,68`;
+              const grad = ctx.createLinearGradient(0, Math.min(yZero, p0.y, p1.y), 0, Math.max(yZero, p0.y, p1.y));
+              grad.addColorStop(0, `rgba(${base},${avg >= 0 ? alpha : 0.06})`);
+              grad.addColorStop(1, `rgba(${base},${avg >= 0 ? 0.06 : alpha})`);
+              ctx.fillStyle = grad;
+              ctx.beginPath();
+              ctx.moveTo(p0.x, yZero);
+              ctx.lineTo(p0.x, p0.y);
+              ctx.lineTo(p1.x, p1.y);
+              ctx.lineTo(p1.x, yZero);
+              ctx.closePath();
+              ctx.fill();
+            }
+            ctx.restore();
+          }
+        },
+        afterDatasetsDraw(chart) {
+          const { ctx, chartArea, scales } = chart;
+          const yScale = scales?.y;
+          if (!ctx || !chartArea || !yScale) return;
+          const yZero = yScale.getPixelForValue(0);
+          if (!Number.isFinite(yZero) || yZero < chartArea.top || yZero > chartArea.bottom) return;
+          ctx.save();
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(chartArea.left, yZero);
+          ctx.lineTo(chartArea.right, yZero);
+          ctx.stroke();
+          ctx.restore();
+        }
       };
 
       const getCalendarShiftTitle = () => {
@@ -5114,8 +5200,8 @@
             const itemGap = 18;
 
             const items = [
-              { label: 'Y-1', color: 'rgba(37,99,235,0.5)', hidden: false },
-              { label: 'Y', color: '#2563eb', hidden: false },
+              { label: 'Y-1', color: 'rgba(37,99,235,0.5)', hidden: true },
+              { label: 'Y', color: '#2563eb', hidden: true },
               { label: 'YoY Delta', color: '#ef4444', hidden: false }
             ];
 
@@ -5433,11 +5519,16 @@ callback: function(value, index, ticks) {
           spanGaps: true,
           maintainAspectRatio: false
         },
-        plugins: [HolidayBandsPlugin, CalendarShiftWeekendsPlugin, CalendarShiftHolidayHoverPlugin, CalendarShiftHolidayYminus1WindowsPlugin, CalendarShiftHeaderFooterPlugin]
+        plugins: [HolidayBandsPlugin, CalendarShiftWeekendsPlugin, CalendarShiftZeroLineAndDeltaFillPlugin, CalendarShiftHolidayHoverPlugin, CalendarShiftHolidayYminus1WindowsPlugin, CalendarShiftHeaderFooterPlugin]
       });
 
       // Setup legend click handlers
       setupCalendarShiftLegend();
+      const yMinus1Idx = CHART3_MERGED.data.datasets.findIndex(d => d.label === 'Y-1');
+      const yIdx = CHART3_MERGED.data.datasets.findIndex(d => d.label === 'Y');
+      if (yMinus1Idx >= 0) CHART3_MERGED.hide(yMinus1Idx);
+      if (yIdx >= 0) CHART3_MERGED.hide(yIdx);
+      updateCalShiftLegendStates();
     }
 
 
@@ -6978,6 +7069,26 @@ callback: function(value, index, ticks) {
         // Apply initial background state (default OFF)
         applyWhiteBg();
       }
+      if (els.vizDdBtn2 && els.vizDdMenu2) {
+        const openViz2 = () => { els.vizDdMenu2.classList.remove('hidden'); els.vizDdBtn2.setAttribute('aria-expanded', 'true'); };
+        const closeViz2 = () => { els.vizDdMenu2.classList.add('hidden'); els.vizDdBtn2.setAttribute('aria-expanded', 'false'); };
+        const applyWhiteBg2 = () => {
+          if (!els.tabCalendarShifts) return;
+          const on = !!els.vizOptWhiteBg2?.checked;
+          els.tabCalendarShifts.style.backgroundColor = on ? '#ffffff' : '';
+          els.tabCalendarShifts.style.backgroundImage = on ? 'none' : '';
+        };
+        const redrawCal = () => CHART3_MERGED?.update('none');
+        els.vizDdBtn2.addEventListener('click', (e) => {
+          e.stopPropagation();
+          els.vizDdMenu2.classList.contains('hidden') ? openViz2() : closeViz2();
+        });
+        els.vizDdMenu2.addEventListener('click', (e) => e.stopPropagation());
+        document.addEventListener('click', () => closeViz2());
+        els.vizOptWeekends2?.addEventListener('change', redrawCal);
+        els.vizOptWhiteBg2?.addEventListener('change', () => { applyWhiteBg2(); redrawCal(); });
+        applyWhiteBg2();
+      }
       // Sync holiday checkboxes between Demand Forecast and Calendar Shifts sections
 
       // Sync holiday checkboxes between Demand Forecast and Calendar Shifts sections
@@ -7270,42 +7381,6 @@ callback: function(value, index, ticks) {
           window.__EXPORTING_DEMAND = false;
         }
       });
-
-
-      // === NEW: Inject "Display Weekends" toggle next to Calendar Shifts download button (no HTML edits needed) ===
-      (function ensureCalendarShiftWeekendsToggle() {
-        const dlBtn = document.getElementById('downloadCalendarShiftsChart');
-        if (!dlBtn) return;
-
-        // If already exists, do nothing
-        if (document.getElementById('cShowWeekends2')) return;
-
-        // Create a small toggle that looks/behaves like the other display toggles
-        const wrap = document.createElement('label');
-        wrap.style.cssText = 'display:inline-flex; align-items:center; gap:8px; margin-right:12px; cursor:pointer; user-select:none;';
-
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.id = 'cShowWeekends2';
-        cb.style.cssText = 'transform: translateY(1px);';
-
-        const txt = document.createElement('span');
-        txt.textContent = 'Display Weekends';
-        txt.style.cssText = 'font-size: 0.875rem; color: #334155;';
-
-        wrap.appendChild(cb);
-        wrap.appendChild(txt);
-
-        // Insert before the download button
-        dlBtn.parentNode.insertBefore(wrap, dlBtn);
-
-        // Redraw chart when toggled
-        cb.addEventListener('change', () => {
-          if (CHART3_MERGED) {
-            CHART3_MERGED.update('none');
-          }
-        });
-      })();
 
 
       document.getElementById('downloadCalendarShiftsChart')?.addEventListener('click', () => {
