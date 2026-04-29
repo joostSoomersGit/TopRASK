@@ -7104,59 +7104,85 @@ callback: function(value, index, ticks) {
         }
       }
 
-      // Folder selection handler
-      els.folderInput.addEventListener('change', async (e) => {
-        const files = Array.from(e.target.files || []);
-        if (!files.length) return;
-
-        // Filter only .xlsx files
-        const xlsxFiles = files.filter(f => f.name.toLowerCase().endsWith('.xlsx'));
+      async function processFolderFiles(files) {
+        const xlsxFiles = Array.from(files || []).filter(f => f.name.toLowerCase().endsWith('.xlsx'));
         if (!xlsxFiles.length) {
           if (els.fileStatus) els.fileStatus.textContent = 'No .xlsx files found in selected folder';
-          return;
+          return false;
         }
 
-        // Clear and populate FOLDER_FILES map
         FOLDER_FILES.clear();
         for (const f of xlsxFiles) {
-          // Get filename without extension
           const nameWithoutExt = f.name.replace(/\.xlsx$/i, '');
           FOLDER_FILES.set(nameWithoutExt, f);
         }
 
-        // Populate the dropdown: ICA first, then rest alphabetically
         const allNames = Array.from(FOLDER_FILES.keys());
         const icaName = allNames.find(n => n.toLowerCase() === 'ica');
-        const otherNames = allNames.filter(n => n.toLowerCase() !== 'ica').sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-        
+        const otherNames = allNames
+          .filter(n => n.toLowerCase() !== 'ica')
+          .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
         const sortedNames = icaName ? [icaName, ...otherNames] : otherNames;
 
-        // Clear and populate dropdown
         els.dataSourceSelect.innerHTML = '';
         for (const name of sortedNames) {
           const opt = document.createElement('option');
           opt.value = name;
           opt.textContent = name;
-          // Make ICA bold
-          if (name.toLowerCase() === 'ica') {
-            opt.style.fontWeight = 'bold';
-          }
+          if (name.toLowerCase() === 'ica') opt.style.fontWeight = 'bold';
           els.dataSourceSelect.appendChild(opt);
         }
 
-        // Show the dropdown
         if (els.dataSourceWrapper) els.dataSourceWrapper.style.display = 'flex';
 
-        // Default to ICA if available, otherwise first item
         const defaultSelection = icaName || sortedNames[0];
         els.dataSourceSelect.value = defaultSelection;
-
-        // Load the default file
         const defaultFile = FOLDER_FILES.get(defaultSelection);
-        if (defaultFile) {
-          await loadExcelFile(defaultFile, true);
+        if (defaultFile) await loadExcelFile(defaultFile, true);
+        return true;
+      }
+
+      async function tryAutoLoadInputFolder() {
+        const folderBase = 'Input%20folder/';
+        try {
+          const folderResponse = await fetch(folderBase, { cache: 'no-store' });
+          if (!folderResponse.ok) return false;
+
+          const html = await folderResponse.text();
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, 'text/html');
+          const hrefs = Array.from(doc.querySelectorAll('a[href]')).map(a => a.getAttribute('href') || '');
+          const xlsxHrefs = hrefs.filter(href => /\.xlsx(\?.*)?$/i.test(href));
+          if (!xlsxHrefs.length) return false;
+
+          const downloadedFiles = [];
+          for (const href of xlsxHrefs) {
+            const fileUrl = new URL(href, folderResponse.url || window.location.href).toString();
+            const res = await fetch(fileUrl, { cache: 'no-store' });
+            if (!res.ok) continue;
+            const blob = await res.blob();
+            const cleanName = decodeURIComponent((href.split('/').pop() || '').split('?')[0]);
+            const fileName = cleanName || ('file_' + downloadedFiles.length + '.xlsx');
+            downloadedFiles.push(new File([blob], fileName, { type: blob.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+          }
+
+          if (!downloadedFiles.length) return false;
+          const loaded = await processFolderFiles(downloadedFiles);
+          if (loaded && els.fileStatus) els.fileStatus.textContent = 'Loaded from Input folder';
+          return loaded;
+        } catch (_) {
+          return false;
         }
+      }
+
+      // Folder selection handler
+      els.folderInput.addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files || []);
+        if (!files.length) return;
+        await processFolderFiles(files);
       });
+
+      void tryAutoLoadInputFolder();
 
       // Data source dropdown change handler
       els.dataSourceSelect.addEventListener('change', async (e) => {
