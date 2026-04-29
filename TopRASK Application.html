@@ -824,32 +824,16 @@
       class="tab-panel p-5 -mt-px hidden bg-white/70 backdrop-blur rounded-xl border border-slate-200" role="tabpanel"
       aria-hidden="true">
 
-      <div class="grid grid-cols-1 gap-4 mb-3 items-start">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3 items-start">
         <div class="col-span-1">
           <h2 class="text-lg font-semibold">Calendar Shifts</h2>
           <div class="text-xs text-slate-500 mt-1">
             This chart shows <span class="font-semibold">only the RASK coming from the holiday demand component</span>.
           </div>
         </div>
-      </div>
-
-      <div class="grid grid-cols-1 gap-4">
-        <div class="col-span-1">
-          <div class="flex items-center justify-between mb-2">
-            <div class="flex items-center gap-2">
-              <button id="downloadCalendarShiftsChart" class="chip hover:bg-slate-200 flex items-center gap-1"
-                title="Download PNG (transparent)">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"
-                  aria-hidden="true">
-                  <path
-                    d="M12 3a1 1 0 011 1v8.586l2.293-2.293a1 1 0 111.414 1.414l-4.001 4.001a1 1 0 01-1.414 0L7.29 11.707a1 1 0 011.414-1.414L11 12.586V4a1 1 0 011-1z" />
-                  <path d="M5 20a2 2 0 01-2-2v-2a1 1 0 112 0v2h14v-2a1 1 0 112 0v2a2 2 0 01-2 2H5z" />
-                </svg>
-                Download
-              </button>
-            </div>
-            <!-- Display Holidays (linked with Demand Forecast section) -->
-            <div class="flex flex-col items-end gap-2 relative">
+        <div class="col-span-1 justify-self-end">
+          <!-- Display Holidays (linked with Demand Forecast section) -->
+          <div class="flex flex-col items-end gap-2 relative">
               <div class="flex items-center gap-2 flex-wrap justify-end relative">
                 <span class="text-sm font-medium">Visualization:</span>
                 <button id="vizDdBtn2" type="button" class="chip flex items-center gap-1" aria-haspopup="true"
@@ -880,6 +864,7 @@
                 <label class="chip"><input type="checkbox" id="cHolHome2" class="mr-1" />Home</label>
                 <label class="chip"><input type="checkbox" id="cHolOut2" class="mr-1" />Outstation</label>
                 <label class="chip"><input type="checkbox" id="cHolOther2" class="mr-1" />Other</label>
+                <button id="downloadCalendarShiftsData" class="chip hover:bg-slate-200 flex items-center gap-1" title="Download Calendar Shift data">Download</button>
                 <div id="holInfoPop2" class="heat-pop"
                   style="display:none; position:absolute; right:0; bottom:26px; overflow-y:hidden;">
                   <div class="line">Holidays are added as special events that can cause temporary changes in demand,</div>
@@ -891,6 +876,8 @@
             </div>
           </div>
 
+      <div class="grid grid-cols-1 gap-4">
+        <div class="col-span-1">
           <!-- Merged Calendar Shifts Chart (2025 & 2026) -->
           <div class="h-[350px]">
             <canvas id="raskCalendarShiftsChartMerged" height="120"></canvas>
@@ -1065,6 +1052,7 @@
     let dateList2 = [];
     let DATE_RANGE3 = { start: null, end: null };
     let dateList3 = [];
+    let calendarShiftSliderSelection = null;
     let CHART2_OPEN = false, SHOW_REVENUE = false;
     let SELECTED_DATES_KEYS = new Set();
     let PCT_SELECT = 'off', PCT_THRESHOLD = null, PCT_IS_BOTTOM = false;
@@ -2869,9 +2857,6 @@
           { key: 'cabin', label: 'Cabin' }
         ];
 
-        const isICA = String(els.dataSourceSelect?.value || '').trim().toLowerCase() === 'ica';
-        const disabledForICA = new Set(['complex', 'flightPairGroup', 'subline']);
-
         const grid = document.createElement('div');
         grid.style.cssText = 'display:grid; grid-template-columns:1fr 1fr; gap:8px 10px; margin-top:8px;';
         for (const o of opts) {
@@ -2884,15 +2869,6 @@
           cb.style.cssText = 'transform: translateY(1px);';
           const sp = document.createElement('span');
           sp.textContent = o.label;
-
-          // If ICA is selected, disable Complex / Flight Pair Group / Subline grouping
-          if (isICA && disabledForICA.has(o.key)) {
-            cb.checked = false;
-            cb.disabled = true;
-            lab.style.opacity = '0.45';
-            lab.style.cursor = 'not-allowed';
-            lab.title = 'Disabled for ICA data source';
-          }
 
           lab.appendChild(cb);
           lab.appendChild(sp);
@@ -4407,11 +4383,11 @@
               if (![p0?.x, p0?.y, p1?.x, p1?.y, v0, v1].every(Number.isFinite)) continue;
               const avg = (v0 + v1) / 2;
               const t = Math.min(1, Math.abs(avg) / 1.5);
-              const alpha = 0.10 + (0.45 * t);
+              const alpha = 0.18 + (0.52 * t);
               const base = avg >= 0 ? `34,197,94` : `239,68,68`;
               const grad = ctx.createLinearGradient(0, Math.min(yZero, p0.y, p1.y), 0, Math.max(yZero, p0.y, p1.y));
-              grad.addColorStop(0, `rgba(${base},${avg >= 0 ? alpha : 0.06})`);
-              grad.addColorStop(1, `rgba(${base},${avg >= 0 ? 0.06 : alpha})`);
+              grad.addColorStop(0, `rgba(${base},${avg >= 0 ? alpha : 0.10})`);
+              grad.addColorStop(1, `rgba(${base},${avg >= 0 ? 0.10 : alpha})`);
               ctx.fillStyle = grad;
               ctx.beginPath();
               ctx.moveTo(p0.x, yZero);
@@ -4424,7 +4400,7 @@
             ctx.restore();
           }
         },
-        afterDatasetsDraw(chart) {
+        beforeDraw(chart) {
           const { ctx, chartArea, scales } = chart;
           const yScale = scales?.y;
           if (!ctx || !chartArea || !yScale) return;
@@ -5701,9 +5677,24 @@ callback: function(value, index, ticks) {
       }
 
       if (!dateList3.length || !els.rangeSlider3) return;
+      const prevSelection = calendarShiftSliderSelection;
       if (els.rangeSlider3.noUiSlider) els.rangeSlider3.noUiSlider.destroy();
+      let startIdx = [0, dateList3.length - 1];
+      if (prevSelection && prevSelection.start instanceof Date && prevSelection.end instanceof Date) {
+        const clampIndex = (targetDate, fallback) => {
+          let best = fallback, bestDiff = Infinity;
+          for (let i = 0; i < dateList3.length; i++) {
+            const diff = Math.abs(dateList3[i].getTime() - targetDate.getTime());
+            if (diff < bestDiff) { bestDiff = diff; best = i; }
+          }
+          return best;
+        };
+        const i0 = clampIndex(prevSelection.start, 0);
+        const i1 = clampIndex(prevSelection.end, dateList3.length - 1);
+        startIdx = [Math.min(i0, i1), Math.max(i0, i1)];
+      }
       noUiSlider.create(els.rangeSlider3, {
-        start: [0, dateList3.length - 1],
+        start: startIdx,
         step: 1,
         connect: true,
         range: { min: 0, max: dateList3.length - 1 },
@@ -5726,6 +5717,7 @@ callback: function(value, index, ticks) {
         const d0 = dateList3[iMin], d1 = dateList3[iMax];
         const minDate = d0 ? new Date(d0) : start;
         const maxDate = d1 ? new Date(d1) : end;
+        calendarShiftSliderSelection = { start: new Date(minDate), end: new Date(maxDate) };
         if (CHART3_MERGED) {
           CHART3_MERGED.options.scales.x.min = minDate;
           CHART3_MERGED.options.scales.x.max = maxDate;
@@ -7383,75 +7375,65 @@ callback: function(value, index, ticks) {
       });
 
 
-      document.getElementById('downloadCalendarShiftsChart')?.addEventListener('click', () => {
-        if (!CHART3_MERGED || !CHART3_MERGED.canvas) {
-          downloadChart(CHART3_MERGED, 'CalendarShifts');
-          return;
+
+      function downloadCalendarShiftsDataExcel(groupBy = [], dateKeys = null) {
+        const dateSet = (dateKeys && dateKeys.length) ? new Set(dateKeys.map(String)) : null;
+        const by = Array.isArray(groupBy) ? groupBy : [];
+        const grouped = new Map();
+        const keyLabelMap = {
+          region: 'Region', complex: 'Complex', flightPairGroup: 'Flight Pair Group', subline: 'Subline',
+          carrier: 'Carrier', bound: 'Bound', cabin: 'Cabin'
+        };
+
+        const rows = (FILTERED || []).filter(r => r && r.date && r.dateKey && (!dateSet || dateSet.has(String(r.dateKey))));
+        for (const r of rows) {
+          const groupVals = by.map(k => String(r[k] ?? ''));
+          const gKey = JSON.stringify(groupVals);
+          let daily = grouped.get(gKey);
+          if (!daily) { daily = { groupVals, map: new Map() }; grouped.set(gKey, daily); }
+          const k = String(r.dateKey);
+          let rec = daily.map.get(k);
+          if (!rec) rec = { date: r.date, rev: 0, seat: 0 };
+          rec.rev += Number(r.rev) || 0;
+          rec.seat += Number(r.seat) || 0;
+          daily.map.set(k, rec);
         }
 
-        window.__EXPORTING_CALSHIFT = true;
-        window.CALSHIFT_DOWNLOAD_MODE = true;
-
-        const chart = CHART3_MERGED;
-        const canvas = chart.canvas;
-
-        // ✅ Save current axis window (so the on-screen chart stays EXACTLY the same after export)
-        const savedXMin = chart.options?.scales?.x?.min;
-        const savedXMax = chart.options?.scales?.x?.max;
-        const savedYMin = chart.options?.scales?.y?.min;
-        const savedYMax = chart.options?.scales?.y?.max;
-
-        // ✅ IMPORTANT: do NOT change canvas.height directly (this can cause the on-screen chart to "zoom" afterwards)
-        // Instead, temporarily increase the HEIGHT of the canvas container for export.
-        const parent = canvas.parentElement;
-        const originalParentHeight = parent ? parent.style.height : '';
-        const originalParentMinHeight = parent ? parent.style.minHeight : '';
-
-        // Read current displayed height in px (fallback to canvas rect)
-        const rect = canvas.getBoundingClientRect();
-        const baseH = rect && rect.height ? rect.height : 0;
-
-        // === Increase vertical size ONLY for export ===
-        const exportHeightFactor = 1.2;   // 🔧 change this number to control how much taller the y-axis becomes
-
-        try {
-          if (parent && baseH > 0) {
-            parent.style.height = Math.round(baseH * exportHeightFactor) + 'px';
-            parent.style.minHeight = parent.style.height;
+        const out = [];
+        for (const g of grouped.values()) {
+          const dayKeys = Array.from(g.map.keys()).sort((a,b)=>a.localeCompare(b));
+          const yMap = new Map();
+          for (const dk of dayKeys) {
+            const rec = g.map.get(dk);
+            const y = (rec && rec.seat > 0) ? (100 * rec.rev / rec.seat) : null;
+            yMap.set(dk, Number.isFinite(y) ? y : null);
           }
-
-          chart.resize();
-          chart.update('none');
-
-          const a = document.createElement('a');
-          a.href = chart.toBase64Image('image/png', 1.0);
-          a.download = filenameTS('CalendarShifts');
-          a.click();
-        } catch (_) {
-          downloadChart(chart, 'CalendarShifts');
-        } finally {
-          // ✅ Restore container height (so the on-screen chart does NOT change)
-          if (parent) {
-            parent.style.height = originalParentHeight;
-            parent.style.minHeight = originalParentMinHeight;
+          for (const dk of dayKeys) {
+            const d = parseDateISO(dk);
+            const prev = new Date(d); prev.setDate(prev.getDate()-364);
+            const prevKey = fmtDateISO(prev);
+            const y = yMap.get(dk);
+            const yPrev = yMap.get(prevKey);
+            const yoy = (y!=null && yPrev!=null) ? (y - yPrev) : null;
+            const row = {};
+            by.forEach((k,i)=>row[keyLabelMap[k]||k]=g.groupVals[i]||'');
+            row['Flight Date'] = dk;
+            row['Y'] = y;
+            row['Y-1'] = yPrev;
+            row['YoY Delta'] = yoy;
+            out.push(row);
           }
-
-          // ✅ Restore axis window exactly as it was
-          if (chart.options?.scales?.x) {
-            chart.options.scales.x.min = savedXMin;
-            chart.options.scales.x.max = savedXMax;
-          }
-          if (chart.options?.scales?.y) {
-            chart.options.scales.y.min = savedYMin;
-            chart.options.scales.y.max = savedYMax;
-          }
-
-          chart.resize();
-          chart.update('none');
-
-          window.__EXPORTING_CALSHIFT = false;
-          window.CALSHIFT_DOWNLOAD_MODE = false;
         }
+        const ws = XLSX.utils.json_to_sheet(out);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Calendar Shifts Data');
+        XLSX.writeFile(wb, filenameTS_xlsx('CalendarShiftsData'));
+      }
+
+      document.getElementById('downloadCalendarShiftsData')?.addEventListener('click', async () => {
+        const cfg = await showTopRaskDaysGroupingPopup();
+        if (!cfg) return;
+        downloadCalendarShiftsDataExcel(cfg.groupBy, cfg.dateKeys);
       });
 
       // Download TopRASK Days as Excel (with grouping popup)
