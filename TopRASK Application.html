@@ -4362,8 +4362,10 @@
         return maxD;
       })();
 
-      const minDate = snapshotDate ? startOfDay(new Date(snapshotDate)) : new Date(2025, 0, 1);
-      const maxDate = newestDate ? endOfDay(new Date(newestDate)) : new Date(2026, 11, 31);
+      const defaultMinDate = snapshotDate ? startOfDay(new Date(snapshotDate)) : new Date(2025, 0, 1);
+      const defaultMaxDate = newestDate ? endOfDay(new Date(newestDate)) : new Date(2026, 11, 31);
+      const minDate = DATE_RANGE3.start ? new Date(DATE_RANGE3.start) : defaultMinDate;
+      const maxDate = DATE_RANGE3.end ? new Date(DATE_RANGE3.end) : defaultMaxDate;
 
       // === NEW: Weekends checkbox (read-only; may be injected elsewhere) ===
       const getShowWeekends = () => {
@@ -7458,7 +7460,18 @@ callback: function(value, index, ticks) {
         const ws = XLSX.utils.json_to_sheet(out);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Calendar Shifts Data');
-        XLSX.writeFile(wb, filenameTS_xlsx('CalendarShiftsData'));
+
+        const fileName = filenameTS_xlsx('CalendarShiftsData');
+        const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbOut], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
       }
 
       document.getElementById('downloadCalendarShiftsData')?.addEventListener('click', async () => {
