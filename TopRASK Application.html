@@ -7421,8 +7421,15 @@ callback: function(value, index, ticks) {
 
 
       function downloadCalendarShiftsDataExcel() {
+        try {
         const selVals = (el) => Array.from(el?.selectedOptions || []).map(o => String(o.value || '').trim()).filter(Boolean);
-        const selectedOrAll = (arr, mapFn = v => v) => arr.length ? arr.map(mapFn).join(', ') : 'All';
+        const selectedOrAll = (arr, mapFn = v => v) => {
+          if (!Array.isArray(arr) || !arr.length) return 'All';
+          const vals = arr.map(v => {
+            try { return String(mapFn(v) ?? '').trim(); } catch (_) { return String(v ?? '').trim(); }
+          }).filter(Boolean);
+          return vals.length ? vals.join(', ') : 'All';
+        };
         const minDate = (calendarShiftSliderSelection?.start instanceof Date) ? new Date(calendarShiftSliderSelection.start) : null;
         const maxDate = (calendarShiftSliderSelection?.end instanceof Date) ? new Date(calendarShiftSliderSelection.end) : null;
 
@@ -7513,6 +7520,11 @@ callback: function(value, index, ticks) {
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1500);
+        } catch (err) {
+          const msg = (err && err.message) ? err.message : String(err || 'Unknown error');
+          console.error('Calendar Shifts export failed:', err);
+          alert(`Calendar Shifts export failed: ${msg}`);
+        }
       }
 
       document.getElementById('downloadCalendarShiftsData')?.addEventListener('click', () => {
