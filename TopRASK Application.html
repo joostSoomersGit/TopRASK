@@ -839,9 +839,6 @@
             <div class="text-xs text-slate-500 mt-1">
               This chart shows <span class="font-semibold">only the RASK coming from the holiday demand component</span>.
             </div>
-            <div class="mt-3">
-              <button id="downloadCalendarShiftsData" class="chip hover:bg-slate-200 flex items-center gap-1" title="Download Calendar Shift data">Download</button>
-            </div>
           </div>
 
           <div class="w-full lg:w-auto lg:shrink-0">
@@ -4385,7 +4382,9 @@
           const yZero = yScale.getPixelForValue(0);
           if (!Number.isFinite(yZero)) return;
 
-          const meta = chart.getDatasetMeta(2); // YoY Delta
+          const yoyIdx = 2; // YoY Delta
+          if (!chart.isDatasetVisible(yoyIdx)) return;
+          const meta = chart.getDatasetMeta(yoyIdx); // YoY Delta
           const ds = chart.data?.datasets?.[2];
           const pts = meta?.data || [];
           const vals = Array.isArray(ds?.data) ? ds.data : [];
@@ -5320,8 +5319,8 @@
               ticks: {
                 source: 'data',
                 autoSkip: false,
-                maxRotation: 0,
-                minRotation: 0,
+                maxRotation: 45,
+                minRotation: 45,
 
 callback: function(value, index, ticks) {
                   const chartDate = new Date(value);
@@ -5349,7 +5348,9 @@ callback: function(value, index, ticks) {
                   // Large range (>= 10 months): show only month names
                   if (rangeMonths >= 10) {
                     if (day === 1) {
-                      return chartDate.toLocaleString('en', { month: 'short' });
+                      const mon = chartDate.toLocaleString('en', { month: 'short' });
+                      const yy = String(chartDate.getFullYear()).slice(-2);
+                      return `${mon}'${yy}`;
                     }
                     return null;
                   }
@@ -5357,7 +5358,9 @@ callback: function(value, index, ticks) {
                   // Medium range (>= 4 months and < 10 months): show month names + cycle names
                   if (rangeMonths >= 4) {
                     if (day === 1) {
-                      return chartDate.toLocaleString('en', { month: 'short' });
+                      const mon = chartDate.toLocaleString('en', { month: 'short' });
+                      const yy = String(chartDate.getFullYear()).slice(-2);
+                      return `${mon}'${yy}`;
                     }
                     const cycleName = getCycleName(day);
                     if (cycleName) return cycleName;
@@ -5366,7 +5369,9 @@ callback: function(value, index, ticks) {
 
                   // Small range (< 4 months): month names + cycle names + day numbers
                   if (day === 1) {
-                    return chartDate.toLocaleString('en', { month: 'short' });
+                    const mon = chartDate.toLocaleString('en', { month: 'short' });
+                    const yy = String(chartDate.getFullYear()).slice(-2);
+                    return `${mon}'${yy}`;
                   }
 
                   const cycleName = getCycleName(day);
