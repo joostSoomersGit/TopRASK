@@ -4212,7 +4212,7 @@
 
     // ==== Chart 3: Holiday RASK YoY (daily, 52 weeks vs 52 weeks) ====
     function buildHolidayDailyMapForCalendarShifts() {
-      const map = new Map(); // key = YYYY-MM-DD, value = { revHol, seat }
+      const map = new Map(); // key = YYYY-MM-DD, value = { hol, tr, wk, yr }
       const rows = FILTERED || [];
       for (const r of rows) {
         if (!r || !r.date) continue;
@@ -4220,20 +4220,34 @@
         if (Number.isNaN(d.getTime())) continue;
 
         const key = fmtDateISO(d);
-        const seat = r.seatkm ?? 0;
-        const revHol = r.holidays ?? 0;
+        const hol = Number(r.holidays) || 0;
+        const tr = Number(r.trend) || 0;
+        const wk = Number(r.weekly) || 0;
+        const yr = Number(r.yearly) || 0;
 
-        if (!seat && !revHol) continue;
+        if (!hol && !tr && !wk && !yr) continue;
 
         let agg = map.get(key);
         if (!agg) {
-          agg = { rev: 0, seat: 0 };
+          agg = { hol: 0, tr: 0, wk: 0, yr: 0 };
           map.set(key, agg);
         }
-        agg.rev += Number(revHol) || 0;
-        agg.seat += Number(seat) || 0;
+        agg.hol += hol;
+        agg.tr += tr;
+        agg.wk += wk;
+        agg.yr += yr;
       }
       return map;
+    }
+
+    function toHolidayContributionPct(rec) {
+      if (!rec) return null;
+      const hol = Number(rec.hol) || 0;
+      const denom = (Number(rec.tr) || 0) + hol + (Number(rec.yr) || 0) + (Number(rec.wk) || 0);
+      if (!Number.isFinite(denom) || denom === 0) return null;
+      const ratio = hol / denom;
+      if (!Number.isFinite(ratio)) return null;
+      return ratio * 100;
     }
 
     function computeHolidayDailyYoYSeries() {
@@ -4264,13 +4278,7 @@
         const curKey = fmtDateISO(cur);
         const curRec = daily.get(curKey) || null;
 
-        let y = null;
-        if (curRec && curRec.seat > 0) {
-          const rask = 100 * curRec.rev / curRec.seat;  // ct/SeatKm
-          if (Number.isFinite(rask)) {
-            y = rask;
-          }
-        }
+        const y = toHolidayContributionPct(curRec);
         series.push({ x: new Date(cur), y });
       }
       return series;
@@ -4285,12 +4293,7 @@
       const dailyAll = buildHolidayDailyMapForCalendarShifts();
       const yMap = new Map();
       for (const [key, rec] of dailyAll.entries()) {
-        let y = null;
-        if (rec && rec.seat > 0) {
-          const rask = 100 * rec.rev / rec.seat;  // ct/SeatKm
-          if (Number.isFinite(rask)) y = rask;
-        }
-        yMap.set(key, y);
+        yMap.set(key, toHolidayContributionPct(rec));
       }
 
       const dataY = [];
@@ -4558,7 +4561,7 @@
         const fmtWeight = (v) => {
           const n = Number(v);
           if (!Number.isFinite(n)) return '';
-          return n.toFixed(2);
+          return `${n.toFixed(0)}%`;
         };
 
         const block = (h, idx, total) => {
@@ -5444,13 +5447,13 @@ callback: function(value, index, ticks) {
             y: {
               title: { 
                 display: true, 
-                text: 'Holiday RASK (ct/SeatKm)'
+                text: 'Holiday RASK contibution [%]'
               },
               ticks: {
                 callback: (v) => {
                   const n = Number(v);
                   if (!Number.isFinite(n)) return '—';
-                  return n.toFixed(2);
+                  return `${n.toFixed(0)}%`;
                 }
               },
               grid: { color: 'rgba(148,163,184,0.2)' }
@@ -5489,7 +5492,7 @@ callback: function(value, index, ticks) {
                       const dYm1 = pt.originalDate2025;
                       info = ` (${fmtDateISO(dY)} minus ${fmtDateISO(dYm1)})`;
                     }
-                    return `${label}${info}: ${y >= 0 ? '+' : ''}${y.toFixed(2)} ct/SeatKm`;
+                    return `${label}${info}: ${y >= 0 ? '+' : ''}${y.toFixed(2)} pp`;
                   }
                   
                   let dateInfo = '';
@@ -5497,7 +5500,7 @@ callback: function(value, index, ticks) {
                     const d = pt.originalDate;
                     dateInfo = ` (${fmtDateISO(d)})`;
                   }
-                  return `${label}${dateInfo}: ${y.toFixed(2)} ct/SeatKm`;
+                  return `${label}${dateInfo}: ${y.toFixed(2)}%`;
                 }
               }
             }
