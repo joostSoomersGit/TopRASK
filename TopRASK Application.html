@@ -7442,10 +7442,6 @@ callback: function(value, index, ticks) {
           }).filter(Boolean);
           return vals.length ? vals.join(', ') : 'All';
         };
-        const minDate = (calendarShiftSliderSelection?.start instanceof Date) ? new Date(calendarShiftSliderSelection.start) : null;
-        const maxDate = (calendarShiftSliderSelection?.end instanceof Date) ? new Date(calendarShiftSliderSelection.end) : null;
-        const dateSet = (Array.isArray(dateKeys) && dateKeys.length) ? new Set(dateKeys.map(String)) : null;
-
         const scopeBase = {
           region: selectedOrAll(selVals(els.fRegion), toFullLabel),
           complex: selectedOrAll(selVals(els.fComplex), toFullLabel),
@@ -7460,7 +7456,12 @@ callback: function(value, index, ticks) {
         const dateSet = (Array.isArray(dateKeys) && dateKeys.length) ? new Set(dateKeys.map(String)) : null;
 
         const by = Array.isArray(groupBy) ? groupBy.filter(Boolean) : [];
-        const rowsInScope = (FILTERED || []).filter(r => {
+        const rowsForCalc = (FILTERED || []).filter(r => {
+          if (!r || !r.date) return false;
+          const d = (r.date instanceof Date) ? r.date : new Date(r.date);
+          return !Number.isNaN(d.getTime());
+        });
+        const rowsInScope = rowsForCalc.filter(r => {
           if (!r || !r.date) return false;
           const d = (r.date instanceof Date) ? r.date : new Date(r.date);
           if (Number.isNaN(d.getTime())) return false;
@@ -7475,7 +7476,7 @@ callback: function(value, index, ticks) {
         }
 
         const grouped = new Map();
-        for (const r of rowsInScope) {
+        for (const r of rowsForCalc) {
           const d = (r.date instanceof Date) ? r.date : new Date(r.date);
           const dk = fmtDateISO(d);
           const groupObj = {
@@ -7507,10 +7508,12 @@ callback: function(value, index, ticks) {
         };
 
         const out = [];
+        const exportDayKeys = Array.from(new Set(rowsInScope.map(r => fmtDateISO((r.date instanceof Date) ? r.date : new Date(r.date))))).sort((a, b) => a.localeCompare(b));
         for (const g of grouped.values()) {
-          const dayKeys = Array.from(g.dayMap.keys()).sort((a, b) => a.localeCompare(b));
-          const yMap = new Map(dayKeys.map(dk => [dk, toPct(g.dayMap.get(dk))]));
-          for (const dk of dayKeys) {
+          const allDayKeys = Array.from(g.dayMap.keys()).sort((a, b) => a.localeCompare(b));
+          const yMap = new Map(allDayKeys.map(dk => [dk, toPct(g.dayMap.get(dk))]));
+          for (const dk of exportDayKeys) {
+            if (!yMap.has(dk)) continue;
             const d = new Date(dk);
             const prev = new Date(d); prev.setDate(prev.getDate() - 364);
             const prevKey = fmtDateISO(prev);
