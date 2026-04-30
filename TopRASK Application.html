@@ -7573,10 +7573,8 @@ callback: function(value, index, ticks) {
         }
       }
 
-      document.getElementById('downloadCalendarShiftsData')?.addEventListener('click', async () => {
-        const cfg = await showTopRaskDaysGroupingPopup();
-        if (!cfg) return;
-        downloadCalendarShiftsDataExcel(cfg.groupBy, cfg.dateKeys);
+      document.getElementById('downloadCalendarShiftsData')?.addEventListener('click', () => {
+        downloadCalendarShiftsDataExcel();
       });
 
       // Download TopRASK Days as Excel (with grouping popup)
