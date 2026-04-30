@@ -7420,7 +7420,7 @@ callback: function(value, index, ticks) {
 
 
 
-      function downloadCalendarShiftsDataExcel() {
+      function downloadCalendarShiftsDataExcel(groupBy = [], dateKeys = null) {
         try {
         const selVals = (el) => Array.from(el?.selectedOptions || []).map(o => String(o.value || '').trim()).filter(Boolean);
         const selectedOrAll = (arr, mapFn = v => v) => {
@@ -7432,6 +7432,7 @@ callback: function(value, index, ticks) {
         };
         const minDate = (calendarShiftSliderSelection?.start instanceof Date) ? new Date(calendarShiftSliderSelection.start) : null;
         const maxDate = (calendarShiftSliderSelection?.end instanceof Date) ? new Date(calendarShiftSliderSelection.end) : null;
+        const dateSet = (Array.isArray(dateKeys) && dateKeys.length) ? new Set(dateKeys.map(String)) : null;
 
         if (!CHART3_MERGED?.data?.datasets?.length) {
           alert('No Calendar Shifts chart data available for export.');
@@ -7456,7 +7457,9 @@ callback: function(value, index, ticks) {
             if (!d) continue;
             if (minDate && d < minDate) continue;
             if (maxDate && d > maxDate) continue;
-            map.set(fmtDateISO(d), pointY(pt));
+            const dk = fmtDateISO(d);
+            if (dateSet && !dateSet.has(dk)) continue;
+            map.set(dk, pointY(pt));
           }
           return map;
         };
@@ -7470,7 +7473,7 @@ callback: function(value, index, ticks) {
           return;
         }
 
-        const scope = {
+        const scopeBase = {
           region: selectedOrAll(selVals(els.fRegion), toFullLabel),
           complex: selectedOrAll(selVals(els.fComplex), toFullLabel),
           flightPairGroup: selectedOrAll(selVals(els.fFpg)),
@@ -7480,8 +7483,49 @@ callback: function(value, index, ticks) {
           cabin: selectedOrAll(Array.from(CABIN_SELECTED || []))
         };
 
+        const by = Array.isArray(groupBy) ? groupBy.filter(Boolean) : [];
+        const groupedScopes = [];
+        if (!by.length) {
+          groupedScopes.push(scopeBase);
+        } else {
+          const groupRows = (FILTERED || []).filter(r => {
+            if (!r || !r.date) return false;
+            const d = (r.date instanceof Date) ? r.date : new Date(r.date);
+            if (Number.isNaN(d.getTime())) return false;
+            if (minDate && d < minDate) return false;
+            if (maxDate && d > maxDate) return false;
+            const dk = fmtDateISO(d);
+            return (!dateSet || dateSet.has(dk));
+          });
+          const seen = new Set();
+          for (const r of groupRows) {
+            const keyObj = {
+              region: by.includes('region') ? (r.region ?? '') : scopeBase.region,
+              complex: by.includes('complex') ? (r.complex ?? '') : scopeBase.complex,
+              flightPairGroup: by.includes('flightPairGroup') ? (r.flightPairGroup ?? '') : scopeBase.flightPairGroup,
+              subline: by.includes('subline') ? (r.subline ?? '') : scopeBase.subline,
+              carrier: by.includes('carrier') ? (r.carrier ?? '') : scopeBase.carrier,
+              bound: by.includes('bound') ? (r.bound ?? '') : scopeBase.bound,
+              cabin: by.includes('cabin') ? (r.cabin ?? '') : scopeBase.cabin
+            };
+            const key = JSON.stringify(keyObj);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            groupedScopes.push({
+              region: keyObj.region ? toFullLabel(String(keyObj.region)) : 'All',
+              complex: keyObj.complex ? toFullLabel(String(keyObj.complex)) : 'All',
+              flightPairGroup: keyObj.flightPairGroup ? String(keyObj.flightPairGroup) : 'All',
+              subline: keyObj.subline ? String(keyObj.subline) : 'All',
+              carrier: keyObj.carrier ? toFullLabel(String(keyObj.carrier)) : 'All',
+              bound: keyObj.bound ? boundToLabel(String(keyObj.bound)) : 'All',
+              cabin: keyObj.cabin ? String(keyObj.cabin) : 'All'
+            });
+          }
+          if (!groupedScopes.length) groupedScopes.push(scopeBase);
+        }
+
         const out = [];
-        for (const dk of dayKeys) {
+        for (const scope of groupedScopes) for (const dk of dayKeys) {
           const d = new Date(dk);
           if (!(d instanceof Date) || Number.isNaN(d.getTime())) continue;
           const y = yMap.get(dk);
