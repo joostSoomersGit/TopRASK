@@ -247,49 +247,56 @@
     .tabbar {
       display: flex;
       justify-content: center;
-      align-items: flex-end;
-      gap: 0.25rem;
-      padding: 0.35rem 0.35rem 0;
-      margin-bottom: 0;
+      align-items: center;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      padding: 0.45rem;
+      margin: 0 auto;
+      width: fit-content;
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      background: rgba(255, 255, 255, 0.65);
+      backdrop-filter: blur(8px);
+      border-radius: 0.95rem;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
       position: relative;
       z-index: 10;
     }
 
     .tab-btn {
       position: relative;
-      margin-bottom: -2px;
-      padding: .65rem 1rem;
-      border-radius: .75rem;
+      padding: .5rem .9rem;
+      border-radius: .65rem;
       font-weight: 600;
-      font-size: .875rem;
-      color: #0f172a;
-      background: linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(241, 245, 249, 0.7));
-      border: 1px solid #e2e8f0;
-      transition: transform .12s ease, background .2s ease, box-shadow .2s ease;
+      font-size: .81rem;
+      letter-spacing: .01em;
+      color: #1e293b;
+      background: transparent;
+      border: 1px solid transparent;
+      transition: all .18s ease;
+      white-space: nowrap;
     }
 
     .tab-btn:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 20px rgba(2, 6, 23, 0.12);
+      background: rgba(148, 163, 184, 0.12);
+      border-color: rgba(148, 163, 184, 0.2);
     }
 
     .tab-btn.active {
-      /* selected tab background + border in AFKL red */
       background: #931116;
       color: #fff;
       border-color: #931116;
-      box-shadow: 0 10px 24px rgba(2, 6, 23, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      box-shadow: 0 8px 18px rgba(147, 17, 22, 0.32);
     }
 
     .tab-btn.active::after {
       content: "";
       position: absolute;
-      left: 12px;
-      right: 12px;
-      bottom: 0;
-      height: 3px;
+      left: 11px;
+      right: 11px;
+      bottom: 5px;
+      height: 2px;
       border-radius: 9999px;
-      background: #931116;
+      background: rgba(255, 255, 255, 0.8);
     }
     .tab-panel {
       margin-top: 0;
@@ -498,13 +505,13 @@
 
     <div class="tabbar">
       <button class="tab-btn active" data-tab="tabChart" aria-controls="tabChart" type="button">
-        📈 Main Chart
-      </button>
-      <button class="tab-btn" data-tab="tabHeatmap" aria-controls="tabHeatmap" type="button">
-        🗓️ Calendar
+        📈 Forecast
       </button>
       <button class="tab-btn" data-tab="tabCalendarShifts" aria-controls="tabCalendarShifts" type="button">
         🔀 Calendar Shifts
+      </button>
+      <button class="tab-btn" data-tab="tabHeatmap" aria-controls="tabHeatmap" type="button">
+        🗓️ Calendar
       </button>
       <button class="tab-btn" data-tab="tabEvents" aria-controls="tabEvents" type="button">
         🎉 Events
