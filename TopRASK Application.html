@@ -881,6 +881,18 @@
                   <div class="line mt-1">To reflect their true importance, holidays are weighted by PoO LF contribution.</div>
                 </div>
               </div>
+              <div class="flex items-center gap-2 flex-wrap lg:justify-end">
+                <button id="downloadCalendarShiftsData" class="chip hover:bg-slate-200 flex items-center gap-1"
+                  title="Download Calendar Shift as Excel">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"
+                    aria-hidden="true">
+                    <path
+                      d="M12 3a1 1 0 011 1v8.586l2.293-2.293a1 1 0 111.414 1.414l-4.001 4.001a1 1 0 01-1.414 0L7.29 11.707a1 1 0 011.414-1.414L11 12.586V4a1 1 0 011-1z" />
+                    <path d="M5 20a2 2 0 01-2-2v-2a1 1 0 112 0v2h14v-2a1 1 0 112 0v2a2 2 0 01-2 2H5z" />
+                  </svg>
+                  Download Calendar Shift
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -7408,75 +7420,86 @@ callback: function(value, index, ticks) {
 
 
 
-      function downloadCalendarShiftsDataExcel(groupBy = [], dateKeys = null) {
-        const dateSet = (dateKeys && dateKeys.length) ? new Set(dateKeys.map(String)) : null;
-        const by = Array.isArray(groupBy) ? groupBy : [];
-        const grouped = new Map();
-        const keyLabelMap = {
-          region: 'Region', complex: 'Complex', flightPairGroup: 'Flight Pair Group', subline: 'Subline',
-          carrier: 'Carrier', bound: 'Bound', cabin: 'Cabin'
+      function downloadCalendarShiftsDataExcel() {
+        try {
+        const selVals = (el) => Array.from(el?.selectedOptions || []).map(o => String(o.value || '').trim()).filter(Boolean);
+        const selectedOrAll = (arr, mapFn = v => v) => {
+          if (!Array.isArray(arr) || !arr.length) return 'All';
+          const vals = arr.map(v => {
+            try { return String(mapFn(v) ?? '').trim(); } catch (_) { return String(v ?? '').trim(); }
+          }).filter(Boolean);
+          return vals.length ? vals.join(', ') : 'All';
+        };
+        const minDate = (calendarShiftSliderSelection?.start instanceof Date) ? new Date(calendarShiftSliderSelection.start) : null;
+        const maxDate = (calendarShiftSliderSelection?.end instanceof Date) ? new Date(calendarShiftSliderSelection.end) : null;
+
+        if (!CHART3_MERGED?.data?.datasets?.length) {
+          alert('No Calendar Shifts chart data available for export.');
+          return;
+        }
+
+        const parsePointDate = (pt) => {
+          const raw = (pt && typeof pt === 'object' && 'x' in pt) ? pt.x : pt;
+          const d = (raw instanceof Date) ? raw : new Date(raw);
+          return Number.isNaN(d.getTime()) ? null : d;
+        };
+        const pointY = (pt) => {
+          const v = (pt && typeof pt === 'object' && 'y' in pt) ? pt.y : null;
+          const n = Number(v);
+          return Number.isFinite(n) ? n : null;
+        };
+        const buildSeriesMap = (label) => {
+          const ds = CHART3_MERGED.data.datasets.find(d => d && d.label === label);
+          const map = new Map();
+          for (const pt of (ds?.data || [])) {
+            const d = parsePointDate(pt);
+            if (!d) continue;
+            if (minDate && d < minDate) continue;
+            if (maxDate && d > maxDate) continue;
+            map.set(fmtDateISO(d), pointY(pt));
+          }
+          return map;
         };
 
-        const rows = (FILTERED || []).filter(r => {
-          if (!r || !r.date) return false;
-          const dObj = (r.date instanceof Date) ? r.date : new Date(r.date);
-          if (Number.isNaN(dObj.getTime())) return false;
-          const dKey = fmtDateISO(dObj);
-          return (!dateSet || dateSet.has(String(dKey)));
-        });
-        if (!rows.length) {
+        const yMap = buildSeriesMap('Y');
+        const yMinus1Map = buildSeriesMap('Y-1');
+        const yoyMap = buildSeriesMap('YoY Delta');
+        const dayKeys = Array.from(yMap.keys()).sort((a, b) => a.localeCompare(b));
+        if (!dayKeys.length) {
           alert('No Calendar Shifts data found for the selected export settings.');
           return;
         }
 
-        for (const r of rows) {
-          const groupVals = by.map(k => String(r[k] ?? ''));
-          const gKey = JSON.stringify(groupVals);
-          let daily = grouped.get(gKey);
-          if (!daily) { daily = { groupVals, map: new Map() }; grouped.set(gKey, daily); }
-
-          const dObj = (r.date instanceof Date) ? r.date : new Date(r.date);
-          if (Number.isNaN(dObj.getTime())) continue;
-          const dk = fmtDateISO(dObj);
-
-          let rec = daily.map.get(dk);
-          if (!rec) rec = { date: new Date(dObj), rev: 0, seat: 0 };
-          rec.rev += Number(r.rev) || 0;
-          rec.seat += Number(r.seat) || 0;
-          daily.map.set(dk, rec);
-        }
+        const scope = {
+          region: selectedOrAll(selVals(els.fRegion), toFullLabel),
+          complex: selectedOrAll(selVals(els.fComplex), toFullLabel),
+          flightPairGroup: selectedOrAll(selVals(els.fFpg)),
+          subline: selectedOrAll(selVals(els.fSubline)),
+          carrier: selectedOrAll(Array.from(CARRIER_SELECTED || []), toFullLabel),
+          bound: selectedOrAll(Array.from(BOUND_SELECTED || []), boundToLabel),
+          cabin: selectedOrAll(Array.from(CABIN_SELECTED || []))
+        };
 
         const out = [];
-        for (const g of grouped.values()) {
-          const dayKeys = Array.from(g.map.keys()).sort((a, b) => a.localeCompare(b));
-          const yMap = new Map();
-
-          for (const dk of dayKeys) {
-            const rec = g.map.get(dk);
-            const y = (rec && rec.seat > 0) ? (100 * rec.rev / rec.seat) : null;
-            yMap.set(dk, Number.isFinite(y) ? y : null);
-          }
-
-          for (const dk of dayKeys) {
-            const d = parseDateISO(dk) || new Date(dk);
-            if (!(d instanceof Date) || Number.isNaN(d.getTime())) continue;
-
-            const prev = new Date(d);
-            prev.setDate(prev.getDate() - 364);
-            const prevKey = fmtDateISO(prev);
-
-            const y = yMap.get(dk);
-            const yPrev = yMap.get(prevKey);
-            const yoy = (y != null && yPrev != null) ? (y - yPrev) : null;
-
-            const row = {};
-            by.forEach((k, i) => row[keyLabelMap[k] || k] = g.groupVals[i] || '');
-            row['Flight Date'] = dk;
-            row['Y'] = y;
-            row['Y-1'] = yPrev;
-            row['YoY Delta'] = yoy;
-            out.push(row);
-          }
+        for (const dk of dayKeys) {
+          const d = new Date(dk);
+          if (!(d instanceof Date) || Number.isNaN(d.getTime())) continue;
+          const y = yMap.get(dk);
+          const yPrev = yMinus1Map.get(dk);
+          const yoy = yoyMap.get(dk);
+          out.push({
+            'Region': scope.region,
+            'Complex': scope.complex,
+            'Flight Pair Group': scope.flightPairGroup,
+            'Subline': scope.subline,
+            'Carrier': scope.carrier,
+            'Bound': scope.bound,
+            'Cabin': scope.cabin,
+            'Flight Date': dk,
+            'Holiday RASK contribution Y': y,
+            'Holiday RASK contribution Y-1': yPrev,
+            'Holiday RASK contribution YoY Delta': yoy
+          });
         }
 
         if (!out.length) {
@@ -7499,12 +7522,15 @@ callback: function(value, index, ticks) {
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1500);
+        } catch (err) {
+          const msg = (err && err.message) ? err.message : String(err || 'Unknown error');
+          console.error('Calendar Shifts export failed:', err);
+          alert(`Calendar Shifts export failed: ${msg}`);
+        }
       }
 
-      document.getElementById('downloadCalendarShiftsData')?.addEventListener('click', async () => {
-        const cfg = await showTopRaskDaysGroupingPopup();
-        if (!cfg) return;
-        downloadCalendarShiftsDataExcel(cfg.groupBy, cfg.dateKeys);
+      document.getElementById('downloadCalendarShiftsData')?.addEventListener('click', () => {
+        downloadCalendarShiftsDataExcel();
       });
 
       // Download TopRASK Days as Excel (with grouping popup)
