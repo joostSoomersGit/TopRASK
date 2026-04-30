@@ -7446,6 +7446,45 @@ callback: function(value, index, ticks) {
         const maxDate = (calendarShiftSliderSelection?.end instanceof Date) ? new Date(calendarShiftSliderSelection.end) : null;
         const dateSet = (Array.isArray(dateKeys) && dateKeys.length) ? new Set(dateKeys.map(String)) : null;
 
+        if (!CHART3_MERGED?.data?.datasets?.length) {
+          alert('No Calendar Shifts chart data available for export.');
+          return;
+        }
+
+        const parsePointDate = (pt) => {
+          const raw = (pt && typeof pt === 'object' && 'x' in pt) ? pt.x : pt;
+          const d = (raw instanceof Date) ? raw : new Date(raw);
+          return Number.isNaN(d.getTime()) ? null : d;
+        };
+        const pointY = (pt) => {
+          const v = (pt && typeof pt === 'object' && 'y' in pt) ? pt.y : null;
+          const n = Number(v);
+          return Number.isFinite(n) ? n : null;
+        };
+        const buildSeriesMap = (label) => {
+          const ds = CHART3_MERGED.data.datasets.find(d => d && d.label === label);
+          const map = new Map();
+          for (const pt of (ds?.data || [])) {
+            const d = parsePointDate(pt);
+            if (!d) continue;
+            if (minDate && d < minDate) continue;
+            if (maxDate && d > maxDate) continue;
+            const dk = fmtDateISO(d);
+            if (dateSet && !dateSet.has(dk)) continue;
+            map.set(dk, pointY(pt));
+          }
+          return map;
+        };
+
+        const yMap = buildSeriesMap('Y');
+        const yMinus1Map = buildSeriesMap('Y-1');
+        const yoyMap = buildSeriesMap('YoY Delta');
+        const dayKeys = Array.from(yMap.keys()).sort((a, b) => a.localeCompare(b));
+        if (!dayKeys.length) {
+          alert('No Calendar Shifts data found for the selected export settings.');
+          return;
+        }
+
         const scopeBase = {
           region: selectedOrAll(selVals(els.fRegion), toFullLabel),
           complex: selectedOrAll(selVals(els.fComplex), toFullLabel),
@@ -7455,77 +7494,55 @@ callback: function(value, index, ticks) {
           bound: selectedOrAll(Array.from(BOUND_SELECTED || []), boundToLabel),
           cabin: selectedOrAll(Array.from(CABIN_SELECTED || []))
         };
-        const minDate = (calendarShiftSliderSelection?.start instanceof Date) ? new Date(calendarShiftSliderSelection.start) : null;
-        const maxDate = (calendarShiftSliderSelection?.end instanceof Date) ? new Date(calendarShiftSliderSelection.end) : null;
-        const dateSet = (Array.isArray(dateKeys) && dateKeys.length) ? new Set(dateKeys.map(String)) : null;
 
         const by = Array.isArray(groupBy) ? groupBy.filter(Boolean) : [];
-        const rowsInScope = (FILTERED || []).filter(r => {
-          if (!r || !r.date) return false;
-          const d = (r.date instanceof Date) ? r.date : new Date(r.date);
-          if (Number.isNaN(d.getTime())) return false;
-          if (minDate && d < minDate) return false;
-          if (maxDate && d > maxDate) return false;
-          const dk = fmtDateISO(d);
-          return (!dateSet || dateSet.has(dk));
-        });
-        if (!rowsInScope.length) {
-          alert('No Calendar Shifts data found for the selected export settings.');
-          return;
+        const groupedScopes = [];
+        if (!by.length) {
+          groupedScopes.push(scopeBase);
+        } else {
+          const groupRows = (FILTERED || []).filter(r => {
+            if (!r || !r.date) return false;
+            const d = (r.date instanceof Date) ? r.date : new Date(r.date);
+            if (Number.isNaN(d.getTime())) return false;
+            if (minDate && d < minDate) return false;
+            if (maxDate && d > maxDate) return false;
+            const dk = fmtDateISO(d);
+            return (!dateSet || dateSet.has(dk));
+          });
+          const seen = new Set();
+          for (const r of groupRows) {
+            const keyObj = {
+              region: by.includes('region') ? (r.region ?? '') : scopeBase.region,
+              complex: by.includes('complex') ? (r.complex ?? '') : scopeBase.complex,
+              flightPairGroup: by.includes('flightPairGroup') ? (r.flightPairGroup ?? '') : scopeBase.flightPairGroup,
+              subline: by.includes('subline') ? (r.subline ?? '') : scopeBase.subline,
+              carrier: by.includes('carrier') ? (r.carrier ?? '') : scopeBase.carrier,
+              bound: by.includes('bound') ? (r.bound ?? '') : scopeBase.bound,
+              cabin: by.includes('cabin') ? (r.cabin ?? '') : scopeBase.cabin
+            };
+            const key = JSON.stringify(keyObj);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            groupedScopes.push({
+              region: keyObj.region ? toFullLabel(String(keyObj.region)) : 'All',
+              complex: keyObj.complex ? toFullLabel(String(keyObj.complex)) : 'All',
+              flightPairGroup: keyObj.flightPairGroup ? String(keyObj.flightPairGroup) : 'All',
+              subline: keyObj.subline ? String(keyObj.subline) : 'All',
+              carrier: keyObj.carrier ? toFullLabel(String(keyObj.carrier)) : 'All',
+              bound: keyObj.bound ? boundToLabel(String(keyObj.bound)) : 'All',
+              cabin: keyObj.cabin ? String(keyObj.cabin) : 'All'
+            });
+          }
+          if (!groupedScopes.length) groupedScopes.push(scopeBase);
         }
-
-        const grouped = new Map();
-        for (const r of rowsInScope) {
-          const d = (r.date instanceof Date) ? r.date : new Date(r.date);
-          const dk = fmtDateISO(d);
-          const groupObj = {
-            region: by.includes('region') ? String(r.region ?? '') : scopeBase.region,
-            complex: by.includes('complex') ? String(r.complex ?? '') : scopeBase.complex,
-            flightPairGroup: by.includes('flightPairGroup') ? String(r.flightPairGroup ?? '') : scopeBase.flightPairGroup,
-            subline: by.includes('subline') ? String(r.subline ?? '') : scopeBase.subline,
-            carrier: by.includes('carrier') ? String(r.carrier ?? '') : scopeBase.carrier,
-            bound: by.includes('bound') ? String(r.bound ?? '') : scopeBase.bound,
-            cabin: by.includes('cabin') ? String(r.cabin ?? '') : scopeBase.cabin
-          };
-          const gk = JSON.stringify(groupObj);
-          let g = grouped.get(gk);
-          if (!g) { g = { scope: groupObj, dayMap: new Map() }; grouped.set(gk, g); }
-          let rec = g.dayMap.get(dk);
-          if (!rec) rec = { hol: 0, tr: 0, wk: 0, yr: 0 };
-          rec.hol += Number(r.holidays) || 0;
-          rec.tr += Number(r.trend) || 0;
-          rec.wk += Number(r.weekly) || 0;
-          rec.yr += Number(r.yearly) || 0;
-          g.dayMap.set(dk, rec);
-        }
-
-        const toPct = rec => {
-          if (!rec) return null;
-          const denom = rec.hol + rec.tr + rec.wk + rec.yr;
-          if (!Number.isFinite(denom) || denom === 0) return null;
-          return (rec.hol / denom) * 100;
-        };
 
         const out = [];
-        for (const g of grouped.values()) {
-          const dayKeys = Array.from(g.dayMap.keys()).sort((a, b) => a.localeCompare(b));
-          const yMap = new Map(dayKeys.map(dk => [dk, toPct(g.dayMap.get(dk))]));
-          for (const dk of dayKeys) {
-            const d = new Date(dk);
-            const prev = new Date(d); prev.setDate(prev.getDate() - 364);
-            const prevKey = fmtDateISO(prev);
-            const y = yMap.get(dk);
-            const yPrev = yMap.get(prevKey);
-            const yoy = (y != null && yPrev != null) ? (y - yPrev) : null;
-            const scope = {
-              region: by.includes('region') ? (g.scope.region ? toFullLabel(g.scope.region) : 'All') : scopeBase.region,
-              complex: by.includes('complex') ? (g.scope.complex ? toFullLabel(g.scope.complex) : 'All') : scopeBase.complex,
-              flightPairGroup: by.includes('flightPairGroup') ? (g.scope.flightPairGroup || 'All') : scopeBase.flightPairGroup,
-              subline: by.includes('subline') ? (g.scope.subline || 'All') : scopeBase.subline,
-              carrier: by.includes('carrier') ? (g.scope.carrier ? toFullLabel(g.scope.carrier) : 'All') : scopeBase.carrier,
-              bound: by.includes('bound') ? (g.scope.bound ? boundToLabel(g.scope.bound) : 'All') : scopeBase.bound,
-              cabin: by.includes('cabin') ? (g.scope.cabin || 'All') : scopeBase.cabin
-            };
+        for (const scope of groupedScopes) for (const dk of dayKeys) {
+          const d = new Date(dk);
+          if (!(d instanceof Date) || Number.isNaN(d.getTime())) continue;
+          const y = yMap.get(dk);
+          const yPrev = yMinus1Map.get(dk);
+          const yoy = yoyMap.get(dk);
           out.push({
             'Region': scope.region,
             'Complex': scope.complex,
@@ -7539,7 +7556,6 @@ callback: function(value, index, ticks) {
             'Holiday RASK contribution Y-1': yPrev,
             'Holiday RASK contribution YoY Delta': yoy
           });
-        }
         }
 
         if (!out.length) {
